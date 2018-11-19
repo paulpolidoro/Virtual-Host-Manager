@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>VirtualHost</title>
+
+    <link rel="stylesheet" href="node_modules/bootstrap/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="node_modules/font-awesome/css/font-awesome.min.css">
+    <link rel="stylesheet" href="node_modules/jquery-contextmenu/dist/jquery.contextMenu.min.css">
+    <link rel="stylesheet" href="./style.css">
+</head>
+
+<body>
+<div class="row" style="width: 700px;">
+    <div class="col-4 col-sm-4 col-md-4 box-left">
+        <b class="text-left">Meus Hosts</b>
+        <hr>
+        <div class="list-host">
+            <ul id="list_host"></ul>
+        </div>
+
+        <hr>
+
+        <button class="btn-block button-active" id="novo_host"><span class="fa fa-plus"></span> Novo VirtualHost
+        </button>
+    </div>
+    <div class="col-8 col-sm-8 col-md-8 box-right">
+        <b class="text-left">Virtual Hosts &lt; ></b>
+        <hr>
+
+        <div id="detalhes">
+
+        </div>
+
+        <div class="card" id="formulario">
+            <div class="card-body">
+                <form>
+                    <label for="server_name">Host</label>
+                    <input type="text" class="form-control-sm form-control" id="server_name" name="server_name">
+
+                    <label for="document_root">Document root</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control-sm form-control" id="document_root" name="document_root">
+
+                        <div class="input-group-append">
+                            <button class="btn btn-sm btn-outline-secondary" type="button" onclick="procurar()"><span
+                                    class="fa fa-folder-open"></span></button>
+                        </div>
+                    </div>
+
+                </form>
+            </div>
+
+            <div class="card-footer">
+                <button class="button_cancel" onclick="cancelar()"><span class="fa fa-remove"></span> Cancelar</button>
+                <button class="float-right button-active" onclick="salvar()"><span class="fa fa-save"></span> Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+
+<script>
+    const {dialog} = require('electron').remote;
+    const $ = require('jquery');
+    const fs = require('fs');
+    const i18n = new (require('./translations/i18n.js'));
+    require('jquery-contextmenu');
+
+    const myConsole = new require('console').Console(process.stdout, process.stderr);
+
+    const sudo = require('child_process');
+
+    const formulario = $("#formulario");
+
+    formulario.hide();
+
+    /**
+     * Função para carregar e listar os hosts encontrados
+     */
+    function listarHosts() {
+        var list = $("#list_host");
+
+        list.html("");
+
+        //Procura por virtual hosts
+        fs.readdir('/etc/apache2/sites-available/', (err, dir) => {
+            for (let filePath of dir) {
+                var host = filePath.toLowerCase();
+
+                //Se encontrar um novo virtual host será exibido
+                if (host.search('.conf') > 0 && host !== '000-default.conf' && host !== 'default-ssl.conf') {
+                    list.append('<li><a href="#" class="context-menu-one" onclick=\'detalhes("/etc/apache2/sites-available/' + host + '")\'><span class="fa fa-link"></span> <span class="link">' + host.replace('.conf', '') + '</span></a></li>');
+                }
+            }
+        });
+    }
+
+    //Chama a função
+    listarHosts();
+
+    /**
+     * Função para criar o virtual host
+     */
+    function salvar() {
+        //var command = "cd /etc/apache2/sites-available && echo '<VirtualHost *:80>\nServerAdmin host\nServerName host\nServerAlias host\nDocumentRoot path\nErrorLog ${APACHE_LOG_DIR}/error.log\nCustomLog ${APACHE_LOG_DIR}/access.log combined\n</VirtualHost>' > %file%";
+        var command = "cp script.sh /etc/apache2/sites-available";
+        var host = $("#server_name");
+        var path = $("#document_root");
+        var fileName = host.val() + '.conf';
+
+        var options = {name: 'VirtualHosts', icns: '/Applications/Electron.app/Contents/Resources/Electron.icns'};
+
+        //Adiciona os dados do formulário
+        command = command.replace('host', host.val());
+        command = command.replace('host', host.val());
+        command = command.replace('host', host.val());
+        command = command.replace('host', host.val());
+
+        command = command.replace('path', path.val());
+        command = command.replace('%file%', fileName);
+
+        //alert(command);
+
+        //Pede permissão de administrador e executa o comando
+        sudo.exec("pkexec echo 'teste' > /etc/sdsteste", options, function (error, stdout, stderr) {
+            if (error) {
+                alert(error);
+                throw error;
+
+            }
+            else {
+                //Recarrega a listagem
+                listarHosts();
+
+                //Verifica se o usuário deseja abrir o link criado
+                if (confirm(i18n.__('VirtualHost created'))) {
+                    require('electron').shell.openExternal('http://' + host.val());
+                }
+
+                //Esconde o formulário
+                cancelar();
+            }
+        });
+    }
+
+    /**
+     * Função para cancelar a criação de um virtual host
+     */
+    function cancelar() {
+        //Esconde o formulário
+        formulario.slideUp();
+
+        //Limpa os campos
+        $("#server_name").val("");
+        $("#document_root").val("");
+    }
+
+    /**
+     * Função para procurar a pasta root
+     */
+    function procurar() {
+        var path = dialog.showOpenDialog({properties: ['openDirectory'], title: 'Abrir', defaultPath: '/var/www/html'});
+
+        //Se um diretório for selecionado
+        if (path.length > 0) {
+            $("#document_root").val(path);
+        }
+    }
+
+    //var arquivo = '/etc/apache2/sites-available/crismoe.net.conf';
+
+    //var arquivo = './texto.txt';
+
+    function detalhes(arquivo) {
+        fs.readFile(arquivo, 'utf-8', function (err, data) {
+            if (err) throw err;
+
+            data = data.replace('<', '&lt;');
+            data = data.replace('>', '&gt;');
+            data = data.replace('>', '&gt;');
+            data = data.replace('<', '<br> &lt;');
+            data = data.replace('\n', '<br>');
+            data = data.replace('\n', '<br>');
+            data = data.replace('\n', '<br>');
+            data = data.replace('\n', '<br>');
+            data = data.replace('\n', '<br>');
+            data = data.replace('\n', '<br>');
+
+            $("#detalhes").html(data);
+        });
+
+        $("#detalhes").slideDown();
+        formulario.slideUp();
+    }
+
+    /**
+     * Função para ler um arquivo de host
+     */
+    function lerVirtualHost(arquivo) {
+        //alert(arquivo);
+        var lineReader = require('readline').createInterface({
+            input: require('fs').createReadStream(arquivo)
+        });
+
+        lineReader.on('line', function (line) {
+            line = line.toLowerCase();
+
+            var str = "";
+
+            //alert(line.search('servername'));
+
+            /* if(line.search('serveradmin') > 0){
+                 str = line.replace('serveradmin ', '');
+                 $("#texto").append(str + '<br>');
+             }*/
+
+            if (line.search('servername') >= 0) {
+                str = line.replace('servername ', '');
+                $("#server_name").val(str);
+            }
+
+            /*if(line.search('serveralias') > 0){
+                str = line.replace('serveralias ', '');
+                $("#texto").append(str + '<br>');
+            }*/
+
+            if (line.search('documentroot') >= 0) {
+                str = line.replace('documentroot ', '');
+                $("#document_root").val(str);
+            }
+        });
+    }
+
+    /**
+     * Cria o menu de contexto
+     */
+    $(function () {
+        $.contextMenu({
+            selector: 'li',
+            callback: function (key, options) {
+                var host = options.$trigger.find($(".link")).html();
+
+                //Segue o link
+                if (key === 'goto') {
+                    require('electron').shell.openExternal('http://' + host);
+                }
+
+                if (key === 'edit') {
+                    lerVirtualHost('./' + host + '.conf');
+                }
+
+                //Apaga o virtual host
+                if (key === 'delete') {
+                    //Exige confirmação do usuário
+                    if (confirm('Deseja remover ' + host + '?')) {
+                        fs.unlink('./' + host + '.conf', (err) => {
+                            if (err) throw err;
+
+                            else listarHosts();
+                        });
+                    }
+                }
+            },
+            items: {
+                "goto": {name: 'Ir para', icon: 'fa-globe'},
+                "edit": {name: "Editar", icon: "edit"},
+                "sep1": "---------",
+                "delete": {name: "Apagar", icon: "delete"},
+            }
+        });
+
+        $('.context-menu-one').on('click', function (e) {
+
+        })
+    });
+
+    /**
+     * Inicia a criação de um novo host
+     */
+    $("#novo_host").click(function () {
+        $("#detalhes").slideUp();
+
+        formulario.slideDown();
+    });
+</script>
+</html>
